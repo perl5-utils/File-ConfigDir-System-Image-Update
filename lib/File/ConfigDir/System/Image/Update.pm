@@ -4,7 +4,8 @@ use 5.008;
 
 use strict;
 use warnings FATAL => 'all';
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
+
+use base qw(Exporter);
 
 use Carp qw(croak);
 use Cwd             ();
@@ -19,15 +20,11 @@ File::ConfigDir::System::Image::Update - System::Image::Update plugin for File::
 
 =cut
 
-$VERSION     = '0.001';
-@ISA         = qw(Exporter);
-@EXPORT      = ();
-@EXPORT_OK   = ( qw(system_image_update_dir system_image_update_volatile_dir), );
-%EXPORT_TAGS = (
+our $VERSION     = '0.001';
+our @EXPORT_OK   = (qw(system_image_update_state_dir system_image_update_volatile_dir),);
+our %EXPORT_TAGS = (
     ALL => [@EXPORT_OK],
 );
-
-my $plack_app;
 
 =head1 SYNOPSIS
 
@@ -44,15 +41,15 @@ locations:
 
     # remember - directory source functions always return lists, even
     #            only one entry is in there
-    my @sysimg_updt_dir = system_image_update_dir;
-    my @sysimg_vol_dir = system_image_update_volatile_dir;
-    my @sysimg_vol_dir = system_image_update_volatile_dir('foo');
+    my @sysupdt_state_dir = system_image_update_state_dir;
+    my @sysupdt_vol_dir = system_image_update_volatile_dir;
+    my @sysupdt_vol_foo_dir = system_image_update_volatile_dir('foo');
 
 =head1 DESCRIPTION
 
 File::ConfigDir::System::Image::Update works as plugin for L<File::ConfigDir>
 to find configurations directories for updaters of embedded environments.
-This requires the environment variable C<SYSTEM_IMAGE_UPDATE_DIR> and/or
+This requires the environment variable C<SYSTEM_IMAGE_UPDATE_STATE_DIR> and/or
 C<SYSTEM_IMAGE_UPDATE_VOLATILE_DIR> being set.
 
 =head1 EXPORT
@@ -62,31 +59,41 @@ desired explicitly.
 
 =head1 SUBROUTINES
 
-=head2 system_image_update_dir
+=head2 system_image_update_state_dir
 
-Returns the configuration directory of L<SYSTEM_IMAGE_UPDATE_DIR>.
+Returns the configuration directory of C<SYSTEM_IMAGE_UPDATE_STATE_DIR>.
+
+For backwards compatibility, a sane amount of time, C<SYSTEM_IMAGE_UPDATE_DIR>
+is used unless C<SYSTEM_IMAGE_UPDATE_STATE_DIR> is available.
 
 =cut
 
-my $system_image_update_dir = sub {
+my $system_image_update_state_dir = sub {
     my @dirs;
 
+    defined $ENV{SYSTEM_IMAGE_UPDATE_STATE_DIR}
+      and -d $ENV{SYSTEM_IMAGE_UPDATE_STATE_DIR}
+      and push @dirs, $ENV{SYSTEM_IMAGE_UPDATE_STATE_DIR}
+      and return @dirs;
+
+    # mind: there is no else after return
     defined $ENV{SYSTEM_IMAGE_UPDATE_DIR} and -d $ENV{SYSTEM_IMAGE_UPDATE_DIR} and push @dirs, $ENV{SYSTEM_IMAGE_UPDATE_DIR};
 
     return @dirs;
 };
 
-sub system_image_update_dir
+sub system_image_update_state_dir
 {
     my @cfg_base = @_;
     0 == scalar(@cfg_base)
-      or croak "system_image_update_dir(), not system_image_update_dir(" . join( ",", ("\$") x scalar(@cfg_base) ) . ")";
-    return $system_image_update_dir->();
+      or croak "system_image_update_state_dir(), not system_image_update_state_dir("
+      . join(",", ("\$") x scalar(@cfg_base)) . ")";
+    return $system_image_update_state_dir->();
 }
 
 =head2 system_image_update_volatile_dir
 
-Returns the configuration directory of L<SYSTEM_IMAGE_UPDATE_VOLATILE_DIR>.
+Returns the configuration directory of C<SYSTEM_IMAGE_UPDATE_VOLATILE_DIR>.
 
 =cut
 
@@ -105,13 +112,13 @@ sub system_image_update_volatile_dir
 {
     my @cfg_base = @_;
     0 == scalar(@cfg_base)
-      or croak "system_image_update_dir(), not system_image_update_dir(" . join( ",", ("\$") x scalar(@cfg_base) ) . ")";
+      or croak "system_image_update_dir(), not system_image_update_dir(" . join(",", ("\$") x scalar(@cfg_base)) . ")";
     return $system_image_update_volatile_dir->();
 }
 
 my $registered;
-File::ConfigDir::_plug_dir_source($system_image_update_dir)
-  and File::ConfigDir::_plug_dir_source($system_image_update_volatile_dir)
+File::ConfigDir->can("_plug_dir_source")->($system_image_update_state_dir)
+  and File::ConfigDir->can("_plug_dir_source")->($system_image_update_volatile_dir)
   unless $registered++;
 
 =head1 AUTHOR
